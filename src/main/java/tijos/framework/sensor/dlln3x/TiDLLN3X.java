@@ -5,14 +5,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 
-import com.sun.media.jfxmedia.logging.Logger;
-
 import tijos.framework.devicecenter.TiUART;
 import tijos.framework.util.Delay;
 import tijos.framework.util.LittleBitConverter;
+import tijos.framework.util.logging.Logger;
 
 /**
- * Hello world!
+ * DL-LN3X Series 2.4G Ad-hoc Network Wireless Communication Module Driver for TiJOS 
  *
  */
 public class TiDLLN3X extends Thread {
@@ -29,37 +28,51 @@ public class TiDLLN3X extends Thread {
 	IDeviceEventListener eventLisener = null;
 
 	WaitAckCmd ackCmd = new WaitAckCmd();
-	
-	public TiDLLN3X(int srcPort) {
-		this.protocol = new Protocol(0, srcPort);
+
+	/**
+	 * Initialize with uart and source port, source address 0 by default
+	 * @param uart
+	 * @param srcPort source port
+	 */
+	public TiDLLN3X(TiUART uart, int srcPort) {
+
+		this(uart, 0, srcPort);
 	}
 
+	/**
+	 * Initialize with uart, source address and source port 
+	 * @param uart 
+	 * @param srcAddr source address
+	 * @param srcPort source port
+	 */
+	public TiDLLN3X(TiUART uart, int srcAddr, int srcPort) {
 
-	public TiDLLN3X(int srcAddr, int srcPort) {
+		TiUartInputStream in = new TiUartInputStream(uart);
+		this.input = new BufferedInputStream(in, 256);
+		this.output = new TiUartOutputStream(uart);
+
 		this.protocol = new Protocol(srcAddr, srcPort);
+
+		this.setDaemon(true);
+		this.start();
 	}
-	
+
+	/**
+	 * Set source address and port 
+	 * @param srcAddr
+	 * @param srcPort
+	 */
 	public void setSrcAddress(int srcAddr, int srcPort) {
 		this.protocol.setSrcAddress(srcAddr);
 		this.protocol.setSrcPort(srcPort);
 	}
 
+	/**
+	 * Event listener for data arrived from remote node
+	 * @param listener
+	 */
 	public void setEventListener(IDeviceEventListener listener) {
 		this.eventLisener = listener;
-	}
-
-	/**
-	 * Initialize IO stream for UART
-	 * 
-	 * @param in
-	 * @param out
-	 */
-	public void initialize(InputStream in, OutputStream out) {
-		this.input = new BufferedInputStream(in, 256);
-		this.output = out;
-
-		this.setDaemon(true);
-		this.start();
 	}
 
 	@Override
@@ -70,7 +83,7 @@ public class TiDLLN3X extends Thread {
 				while (keeprunning) {
 					Delay.msDelay(10);
 
-					while(input.available() < 6) {
+					while (input.available() < 6) {
 						Delay.msDelay(10);
 						continue;
 					}
@@ -79,9 +92,9 @@ public class TiDLLN3X extends Thread {
 					// head
 					if (val == 0xFE) {
 						int len = input.read();
-						if(len < 4)
+						if (len < 4)
 							continue;
-						
+
 						int srcPort = input.read();
 						int destPort = input.read();
 
@@ -89,18 +102,18 @@ public class TiDLLN3X extends Thread {
 						int addrH = input.read();
 
 						len -= 4;
-						while(input.available() < len + 1) {
+						while (input.available() < len + 1) {
 							Delay.msDelay(10);
 							continue;
 						}
-						
-						byte [] buffer = new byte[len];
+
+						byte[] buffer = new byte[len];
 						int pos = 0;
 						while (pos < len) {
 							val = input.read();
 							buffer[pos++] = (byte) val;
 						}
-						
+
 						int end = (input.read() & 0xFF);
 						if (end == 0xFF) {
 							uartDataHandler(srcPort, destPort, (addrH * 256 + addrL), buffer);
@@ -112,8 +125,6 @@ public class TiDLLN3X extends Thread {
 			}
 		}
 	}
-	
-
 
 	/**
 	 * A package data handler
@@ -124,24 +135,24 @@ public class TiDLLN3X extends Thread {
 	 * @param buff
 	 * @param length
 	 */
-	private void uartDataHandler(int srcPort, int destPort, int destAddr, byte[] buff) {
-		
-		if(!responseAckNotify(destAddr, srcPort, destPort, buff)) {
-			if(this.eventLisener != null)
-				this.eventLisener.onDataArrived(srcPort, destPort, destAddr, buff);
+	private void uartDataHandler(int srcPort, int destPort, int srcAddr, byte[] buff) {
+
+		if (!responseAckNotify(srcAddr, srcPort, destPort, buff)) {
+			if (this.eventLisener != null)
+				this.eventLisener.onDataArrived(srcAddr,  srcPort, destPort, buff);
 		}
 	}
-	
-	private boolean responseAckNotify(int destAddr, int srcPort, int destPort, byte[] data) {
+
+	private boolean responseAckNotify(int srcAddr, int srcPort, int destPort, byte[] data) {
 		synchronized (this.ackCmd) {
-			if (this.ackCmd.ackArrived(destAddr, srcPort, destPort)) {
+			if (this.ackCmd.ackArrived(srcAddr, srcPort, destPort)) {
 				this.ackCmd.setData(data);
 				this.ackCmd.notifyAll();
-				
+
 				return true;
 			}
 		}
-		
+
 		return false;
 	}
 
@@ -153,8 +164,8 @@ public class TiDLLN3X extends Thread {
 	private byte[] waitAckNotify() {
 		synchronized (this.ackCmd) {
 			try {
-				this.ackCmd.wait(2000);
-//				this.ackCmd.wait();
+				this.ackCmd.wait(5000);
+				// this.ackCmd.wait();
 
 				if (ackCmd.data == null) {
 					System.out.println("Time out");
@@ -171,7 +182,7 @@ public class TiDLLN3X extends Thread {
 		return null;
 
 	}
-	
+
 	/**
 	 * Red LED control
 	 * 
@@ -224,24 +235,24 @@ public class TiDLLN3X extends Thread {
 	 */
 	private byte[] getDevInfo(int type) throws IOException {
 
-		this.protocol.setRemoteAddress(0x00); //local
+		this.protocol.setRemoteAddress(0x00); // local
 		this.protocol.setDestinationPort(0x21);
 
 		byte[] data = new byte[] { (byte) type };
 		byte[] pack = this.protocol.genDataPack(data);
 
 		this.output.write(pack);
-		
+
 		this.ackCmd.setCmd(0x00, 0x21, this.protocol.getSourcePort());
 
-		byte [] resp = waitAckNotify();
-		
-		if(resp == null) 
+		byte[] resp = waitAckNotify();
+
+		if (resp == null)
 			throw new IOException("No response from device.");
-		
-		if(resp.length == 1 && resp[0] != 0)
+
+		if (resp.length == 1 && resp[0] != 0)
 			throw new IOException("Error code " + resp[0]);
-				
+
 		return resp;
 	}
 
@@ -257,23 +268,23 @@ public class TiDLLN3X extends Thread {
 	 */
 	private void setDevInfo(int type, byte value) throws IOException {
 
-		this.protocol.setRemoteAddress(0x00); //local
+		this.protocol.setRemoteAddress(0x00); // local
 		this.protocol.setDestinationPort(0x21);
 
 		byte[] data = new byte[] { (byte) type, value };
 		byte[] pack = this.protocol.genDataPack(data);
 
 		this.output.write(pack);
-		
+
 		this.ackCmd.setCmd(0x00, 0x21, this.protocol.getSourcePort());
-		byte [] resp = waitAckNotify();
-		
-		if(resp == null) 
+		byte[] resp = waitAckNotify();
+
+		if (resp == null)
 			throw new IOException("No response from device.");
-				
-		if(resp.length == 1 && resp[0] != 0)
-			throw new IOException("Error code " + resp[0]);		
-		
+
+		if (resp.length == 1 && resp[0] != 0)
+			throw new IOException("Error code " + resp[0]);
+
 	}
 
 	/**
@@ -288,22 +299,22 @@ public class TiDLLN3X extends Thread {
 	 */
 	private void setDevInfo(int type, int value) throws IOException {
 
-		this.protocol.setRemoteAddress(0x00); //local
+		this.protocol.setRemoteAddress(0x00); // local
 		this.protocol.setDestinationPort(0x21);
 
 		byte[] data = new byte[] { (byte) type, (byte) value, (byte) (value >>> 8) };
 		byte[] pack = this.protocol.genDataPack(data);
 
 		this.output.write(pack);
-		
+
 		this.ackCmd.setCmd(0x00, 0x21, this.protocol.getSourcePort());
-		byte [] resp = waitAckNotify();
-		
-		if(resp == null) 
+		byte[] resp = waitAckNotify();
+
+		if (resp == null)
 			throw new IOException("No response from device.");
-		
-		if(resp[0] != 0)
-			throw new IOException("Error code " + resp[0]);					
+
+		if (resp[0] != 0)
+			throw new IOException("Error code " + resp[0]);
 	}
 
 	/**
@@ -433,11 +444,11 @@ public class TiDLLN3X extends Thread {
 		byte[] pack = this.protocol.genDataPack(data);
 
 		this.output.write(pack);
-		
+
 		this.ackCmd.setCmd(0x00, 0x23, this.protocol.getSourcePort());
-		byte [] resp = waitAckNotify();
-		
-		if(resp == null) 
+		byte[] resp = waitAckNotify();
+
+		if (resp == null)
 			throw new IOException("No response from device.");
 
 		return resp[2];
@@ -461,37 +472,4 @@ public class TiDLLN3X extends Thread {
 		this.output.write(pack);
 	}
 
-	public static void main(String[] args) {
-		
-		System.out.println("Hello World!");
-
-		Logger.setLevel(0);
-		TiUART uart;
-		try {
-			uart = TiUART.open(5);
-			
-			uart.setWorkParameters(8, 1, TiUART.PARITY_NONE, 115200);
-			
-			TiUartOutputStream out = new TiUartOutputStream(uart);
-			TiUartInputStream in = new TiUartInputStream(uart);
-			
-			TiDLLN3X ln3x = new TiDLLN3X(0X80);
-			ln3x.initialize(in, out);
-			
-			ln3x.turnOnLED(0x0000, 2000); //on 1 second
-			
-			
-			System.out.println(Integer.toHexString(ln3x.getAddress()));
-			System.out.println(Integer.toHexString(ln3x.getChannelID()));
-			System.out.println(Integer.toHexString(ln3x.getNetworkID()));
-			System.out.println(Integer.toHexString(ln3x.getUartBaudrate()));
-			
-			
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-		
-
-	}
 }

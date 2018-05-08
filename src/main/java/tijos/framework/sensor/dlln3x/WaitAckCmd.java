@@ -6,7 +6,7 @@ package tijos.framework.sensor.dlln3x;
  *
  */
 class WaitAckCmd {
-	int destAddr;
+	int srcAddr;
 	int srcPort;
 	int destPort;
 	
@@ -16,21 +16,21 @@ class WaitAckCmd {
 		
 	}
 	
-	public WaitAckCmd(int destAddr, int srcPort, int destPort) {
-		this.destAddr = destAddr;
+	public WaitAckCmd(int srcAddr, int srcPort, int destPort) {
+		this.srcAddr = srcAddr;
 		this.srcPort = srcPort;
 		this.destPort = destPort;
 	}
 
-	public void setCmd(int destAddr, int srcPort, int destPort) {
-		this.destAddr = destAddr;
+	public void setCmd(int srcAddr, int srcPort, int destPort) {
+		this.srcAddr = srcAddr;
 		this.srcPort = srcPort;
 		this.destPort = destPort;
 		this.data = null;
 	}
 
-	public boolean ackArrived(int destAddr, int srcPort, int destPort) {
-		if((this.destAddr == destAddr)
+	public boolean ackArrived(int srcAddr, int srcPort, int destPort) {
+		if((this.srcAddr == srcAddr)
 				&& this.srcPort == srcPort 
 				&& this.destPort == destPort)
 			return true;
@@ -43,7 +43,7 @@ class WaitAckCmd {
 	}
 
 	public void reset() {
-		this.destAddr = 0;
+		this.srcAddr = 0;
 		this.srcPort = 0;
 		this.destPort = 0;
 	}

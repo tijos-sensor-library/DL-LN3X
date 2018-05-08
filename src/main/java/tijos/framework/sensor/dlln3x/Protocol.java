@@ -51,6 +51,12 @@ class Protocol {
 		return this.packLength;
 	}
 	
+	/**
+	 * Generate data pack based on the protocol
+	 * @param data
+	 * @return
+	 * @throws IOException
+	 */
 	public byte [] genDataPack(byte [] data) throws IOException{
 		int pos = 0;
 		int estLen = 7 + estimateLength(data);
